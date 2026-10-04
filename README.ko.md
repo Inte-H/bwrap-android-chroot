@@ -61,25 +61,16 @@ Claude Code는 chroot 안에서 `su`로 root를 얻을 수 있는 일반 계정(
 
    `sandbox.network.allowAllUnixSockets`는 켜지 마십시오. 켜면 Claude Code 프록시를 거치는 샌드박스 명령이 모두 거부됩니다.
 
-`install.sh`는 `bwrap-root`를 `/usr/local/bin`에, 스크립트와 설정 파일을 `/usr/local/lib/bwrap-root`에 설치합니다.
-npm에서 sandbox-runtime 0.0.37을 받아 체크섬을 대조한 뒤 `apply-seccomp`와 `unix-block.bpf`도 그 디렉터리에 넣고,
-`sbx` 계정을 만들고, `/etc/claude-code/managed-settings.json`에 `sandbox.bwrapPath`를 지정합니다.
-`sandbox.bwrapPath`는 관리 설정 파일에서만 적용됩니다. 이미 있는 설정 파일 `config`는 그대로 둡니다.
-`managed-settings.json`이 이미 있으면 `"sandbox": { "bwrapPath": "/usr/local/bin/bwrap-root" }`를 직접 추가하십시오.
-설치 위치는 `PREFIX`로 바꿀 수 있습니다. 제거하려면 설치한 파일, `/var/lib/bwrap-root`, 샌드박스 계정을 삭제하고
-`managed-settings.json`에서 `sandbox.bwrapPath`를 지우십시오.
-
-`bwrap-root` 설정 파일은 `/usr/local/lib/bwrap-root/config`입니다.
+설정은 `/usr/local/lib/bwrap-root/config`에 있습니다.
 
 | 변수 | 뜻 | 기본값 |
 |---|---|---|
 | `SU` | root를 얻는 `su` 경로 | `/system/bin/su` |
 | `SBX_USER` | 샌드박스 명령을 실행할 계정 | `sbx` |
 
-계정 이름은 `SBX_USER=<이름> bash install.sh`로 정합니다. `install.sh`가 만들지 않은 같은 이름의 계정이 있으면 설치하지 않고 멈춥니다.
-계정은 chroot의 시스템 UID 하나로 만듭니다. UID를 직접 정하려면 `SBX_UID=<UID> bash install.sh`로 설치하십시오.
-이때 안드로이드가 쓰지 않는 번호를 고르십시오. 10000 이상은 앱이 쓰고, 그 아래에도 시스템 UID가
-섞여 있습니다. 샌드박스 명령은 폰에서도 그 UID의 권한을 갖습니다.
+계정 이름과 UID는 설치할 때 `SBX_USER=<이름> SBX_UID=<UID> bash install.sh`로 정합니다. `install.sh`가 만들지 않은
+같은 이름의 계정이 있으면 설치를 멈춥니다. UID는 안드로이드가 쓰지 않는 번호를 고르십시오. 10000 이상은 앱이 쓰고,
+그 아래에도 시스템 UID가 섞여 있습니다. 샌드박스 명령은 폰에서도 그 UID의 권한을 갖습니다.
 
 ## 동작 방식
 

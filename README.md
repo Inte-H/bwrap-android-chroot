@@ -64,27 +64,17 @@ the chroot, from this repository's directory.
    Leave `sandbox.network.allowAllUnixSockets` off. With it on, every sandboxed command that goes
    through Claude Code's proxy is refused.
 
-`install.sh` installs `bwrap-root` into `/usr/local/bin` and the scripts and the settings file into
-`/usr/local/lib/bwrap-root`. It downloads sandbox-runtime 0.0.37 from npm, checks the checksums, puts
-`apply-seccomp` and `unix-block.bpf` into that directory as well, creates the `sbx` account, and sets
-`sandbox.bwrapPath` in `/etc/claude-code/managed-settings.json`. `sandbox.bwrapPath` only takes
-effect in the managed settings file. An existing `config` is kept. If `managed-settings.json` already
-exists, add `"sandbox": { "bwrapPath": "/usr/local/bin/bwrap-root" }` to it yourself.
-`PREFIX` changes the install location. To uninstall, delete the installed files, `/var/lib/bwrap-root`
-and the sandbox account, and remove `sandbox.bwrapPath` from `managed-settings.json`.
-
-The `bwrap-root` settings file is `/usr/local/lib/bwrap-root/config`:
+Settings live in `/usr/local/lib/bwrap-root/config`:
 
 | Variable | Meaning | Default |
 |---|---|---|
 | `SU` | path of the `su` that gives root | `/system/bin/su` |
 | `SBX_USER` | account that runs sandboxed commands | `sbx` |
 
-Choose the account's name with `SBX_USER=<name> bash install.sh`. If an account of that name exists
-that `install.sh` did not create, it stops without installing.
-The account gets one of the chroot's system uids. To choose the uid, install with
-`SBX_UID=<uid> bash install.sh`, and pick one Android does not use. Apps use 10000 and up, and system
-uids are scattered below that. Sandboxed commands have that uid's rights on the phone.
+Choose the account's name and uid at install time with `SBX_USER=<name> SBX_UID=<uid> bash install.sh`.
+If an account of that name exists that `install.sh` did not create, the install stops. Pick a uid
+Android does not use. Apps use 10000 and up, and system uids are scattered below that. Sandboxed
+commands have that uid's rights on the phone.
 
 ## How it works
 
