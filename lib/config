@@ -1,0 +1,4 @@
+# bwrap-root settings. Read by bash scripts as plain VAR=value lines.
+
+SU=/system/bin/su
+SBX_USER=sbx

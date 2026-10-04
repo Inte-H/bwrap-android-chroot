@@ -1,0 +1,29 @@
+#!/bin/bash
+# bwrap for a kernel without user and PID namespaces. Claude Code calls it in place of bwrap
+# (sandbox.bwrapPath) and it hands the arguments to root-stage.sh through su.
+set -u
+lib=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/bwrap-root
+. "$lib/config"
+su=$(command -v "$SU") || { echo "bwrap-root: $SU not found" >&2; exit 1; }
+state=${XDG_STATE_HOME:-$HOME/.local/state}/bwrap-root
+umask 077
+mkdir -p "$state" || exit 1
+# root-stage.sh deletes the files it reads; these are from runs where su itself failed
+find "$state" -maxdepth 1 -name 'spec.*' -mmin +60 -delete 2>/dev/null
+spec=$(mktemp "$state/spec.XXXXXX") || exit 1
+
+args=()
+while (($#)); do
+  case $1 in
+    --)        args+=("$@"); break ;;
+    # File descriptors do not survive su, so their contents go to files
+    --args)    mapfile -d '' -t more < <(cat <&"$2"); args+=("${more[@]}"); shift 2 ;;
+    --seccomp) cat <&"$2" > "$spec.seccomp"; args+=(--seccomp-file "$spec.seccomp"); shift 2 ;;
+    *)         args+=("$1"); shift ;;
+  esac
+done
+
+{ printf '%s\0' "$PWD"; printf '%s\0' "${args[@]}"; } > "$spec"
+env -0 > "$spec.env"
+# exec keeps su as bwrap's parent, so --die-with-parent follows Claude Code stopping the command
+exec env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin "$su" -c "exec $(printf '%q %q' "$lib/root-stage.sh" "$spec")"
