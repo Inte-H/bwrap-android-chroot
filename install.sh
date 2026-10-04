@@ -2,6 +2,7 @@
 # Installs bwrap-root into the chroot it is run from and points Claude Code's sandbox at it.
 # Run it as root inside the chroot.
 #   PREFIX    where bin/ and lib/ go                          (default /usr/local)
+#   SBX_USER  name of the sandbox account, for a new config  (default: sbx)
 #   SBX_UID   uid of the sandbox account when it is created   (default: a free system uid)
 # An existing config and managed-settings.json are kept.
 set -eu
@@ -16,9 +17,27 @@ lib=$PREFIX/lib/bwrap-root
 die() { echo "install.sh: $*" >&2; exit 1; }
 ((EUID == 0)) || die "run as root inside the chroot"
 [[ $(uname -m) == aarch64 ]] || die "only arm64 is supported"
-for b in /usr/bin/bwrap /usr/bin/setpriv /usr/bin/perl setfacl unshare ps awk useradd curl tar sha256sum; do
+for b in /usr/bin/bwrap /usr/bin/setpriv /usr/bin/perl setfacl unshare ps awk getent useradd curl tar sha256sum; do
   command -v "$b" >/dev/null || die "$b is missing (install bubblewrap, util-linux, perl, acl, procps, passwd, curl)"
 done
+want_user=${SBX_USER-}
+[[ -z $want_user || $want_user =~ ^[a-z_][a-z0-9_-]*$ ]] || die "SBX_USER=$want_user is not a valid account name"
+if [[ -e $lib/config ]]; then
+  . "$lib/config"
+  [[ -z $want_user || $want_user == "$SBX_USER" ]] ||
+    die "$lib/config names the sandbox account $SBX_USER; change SBX_USER there instead"
+else
+  . "$src/lib/config"
+  SBX_USER=${want_user:-$SBX_USER}
+fi
+# An account of that name that install.sh did not create may be a person's, and sandboxed
+# commands would get its files
+if entry=$(getent passwd "$SBX_USER"); then
+  IFS=: read -r _ _ uid gid _ home shell <<<"$entry"
+  [[ $home == /nonexistent && $shell == */nologin && $(getent group "$SBX_USER" | cut -d: -f3) == "$gid" ]] ||
+    die "an account named $SBX_USER already exists and install.sh did not create it; install with SBX_USER=<another name>"
+  [[ -z ${SBX_UID-} || $SBX_UID == "$uid" ]] || die "$SBX_USER already exists with uid $uid, not $SBX_UID"
+fi
 
 install -d "$PREFIX/bin" "$lib" /var/lib/bwrap-root/proc
 install -m 755 "$src/bin/bwrap-root" "$PREFIX/bin/bwrap-root"
@@ -27,12 +46,10 @@ if [[ -e $lib/config ]]; then
   echo "kept      $lib/config"
 else
   install -m 644 "$src/lib/config" "$lib/config"
+  sed -i "s/^SBX_USER=.*/SBX_USER=$SBX_USER/" "$lib/config"
 fi
-. "$lib/config"
-if ! id -u "$SBX_USER" >/dev/null 2>&1; then
-  useradd --system ${SBX_UID:+--uid "$SBX_UID"} --user-group --no-create-home \
-    --home-dir /nonexistent --shell /usr/sbin/nologin "$SBX_USER"
-fi
+[[ -n ${entry-} ]] || useradd --system ${SBX_UID:+--uid "$SBX_UID"} --user-group --no-create-home \
+  --home-dir /nonexistent --shell /usr/sbin/nologin "$SBX_USER"
 
 # sandbox-runtime 0.0.37 ships a helper that applies the filter without creating namespaces
 tmp=$(mktemp -d)
