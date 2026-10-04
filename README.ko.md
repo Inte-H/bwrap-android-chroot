@@ -43,6 +43,8 @@ Claude Code는 chroot 안에서 `su`로 root를 얻을 수 있는 일반 계정(
    setfacl -m u:sbx:x <디렉터리>
    ```
 
+   다른 이름으로 설치했다면 `sbx` 대신 그 이름을 쓰십시오.
+
    Claude Code 설정의 `sandbox.filesystem.allowWrite`에 넣은 경로에도 프로젝트 디렉터리와 같은 권한이 필요합니다.
 
 4. 격리가 제대로 되는지 확인(Claude Code 계정, 항목마다 PASS 또는 FAIL 출력)
@@ -64,7 +66,7 @@ npm에서 sandbox-runtime 0.0.37을 받아 체크섬을 대조한 뒤 `apply-sec
 `sbx` 계정을 만들고, `/etc/claude-code/managed-settings.json`에 `sandbox.bwrapPath`를 지정합니다.
 `sandbox.bwrapPath`는 관리 설정 파일에서만 적용됩니다. 이미 있는 설정 파일 `config`는 그대로 둡니다.
 `managed-settings.json`이 이미 있으면 `"sandbox": { "bwrapPath": "/usr/local/bin/bwrap-root" }`를 직접 추가하십시오.
-설치 위치는 `PREFIX`로 바꿀 수 있습니다. 제거하려면 설치한 파일, `/var/lib/bwrap-root`, `sbx` 계정을 삭제하고
+설치 위치는 `PREFIX`로 바꿀 수 있습니다. 제거하려면 설치한 파일, `/var/lib/bwrap-root`, 샌드박스 계정을 삭제하고
 `managed-settings.json`에서 `sandbox.bwrapPath`를 지우십시오.
 
 `bwrap-root` 설정 파일은 `/usr/local/lib/bwrap-root/config`입니다.
@@ -72,9 +74,10 @@ npm에서 sandbox-runtime 0.0.37을 받아 체크섬을 대조한 뒤 `apply-sec
 | 변수 | 뜻 | 기본값 |
 |---|---|---|
 | `SU` | root를 얻는 `su` 경로 | `/system/bin/su` |
-| `SBX_USER` | 샌드박스 명령을 실행할 계정, 없으면 `install.sh`가 생성 | `sbx` |
+| `SBX_USER` | 샌드박스 명령을 실행할 계정 | `sbx` |
 
-`sbx` 계정은 chroot의 시스템 UID 하나로 만듭니다. UID를 직접 정하려면 `SBX_UID=<UID> bash install.sh`로 설치하십시오.
+계정 이름은 `SBX_USER=<이름> bash install.sh`로 정합니다. `install.sh`가 만들지 않은 같은 이름의 계정이 있으면 설치하지 않고 멈춥니다.
+계정은 chroot의 시스템 UID 하나로 만듭니다. UID를 직접 정하려면 `SBX_UID=<UID> bash install.sh`로 설치하십시오.
 이때 안드로이드가 쓰지 않는 번호를 고르십시오. 10000 이상은 앱이 쓰고, 그 아래에도 시스템 UID가
 섞여 있습니다. 샌드박스 명령은 폰에서도 그 UID의 권한을 갖습니다.
 

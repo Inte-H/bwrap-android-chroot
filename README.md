@@ -45,6 +45,8 @@ the chroot, from this repository's directory.
    setfacl -m u:sbx:x <directory>
    ```
 
+   If you chose another account name, use it instead of `sbx`.
+
    Paths in Claude Code's `sandbox.filesystem.allowWrite` need the same access as the project directory.
 
 4. Verify the isolation (Claude Code account; each check prints PASS or FAIL)
@@ -69,16 +71,18 @@ the chroot, from this repository's directory.
 effect in the managed settings file. An existing `config` is kept. If `managed-settings.json` already
 exists, add `"sandbox": { "bwrapPath": "/usr/local/bin/bwrap-root" }` to it yourself.
 `PREFIX` changes the install location. To uninstall, delete the installed files, `/var/lib/bwrap-root`
-and the `sbx` account, and remove `sandbox.bwrapPath` from `managed-settings.json`.
+and the sandbox account, and remove `sandbox.bwrapPath` from `managed-settings.json`.
 
 The `bwrap-root` settings file is `/usr/local/lib/bwrap-root/config`:
 
 | Variable | Meaning | Default |
 |---|---|---|
 | `SU` | path of the `su` that gives root | `/system/bin/su` |
-| `SBX_USER` | account that runs sandboxed commands; `install.sh` creates it if missing | `sbx` |
+| `SBX_USER` | account that runs sandboxed commands | `sbx` |
 
-The `sbx` account gets one of the chroot's system uids. To choose the uid, install with
+Choose the account's name with `SBX_USER=<name> bash install.sh`. If an account of that name exists
+that `install.sh` did not create, it stops without installing.
+The account gets one of the chroot's system uids. To choose the uid, install with
 `SBX_UID=<uid> bash install.sh`, and pick one Android does not use. Apps use 10000 and up, and system
 uids are scattered below that. Sandboxed commands have that uid's rights on the phone.
 
