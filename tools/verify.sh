@@ -29,6 +29,9 @@ relay=$!
 offbind=$(mktemp -u /tmp/bwrap-verify-XXXXXX)
 # Claude Code's per-user TMPDIR, where it records the working directory after each command
 tdir=$(mktemp -d /tmp/claude-verify-XXXXXX)
+sid=$(cat /proc/sys/kernel/random/uuid)
+pad=$tdir/-verify/$sid/scratchpad
+(umask 077; mkdir -p "$pad/sub"; echo before > "$pad/before"; echo before > "$pad/sub/before")
 trap 'kill $relay 2>/dev/null; rm -rf "$work" "$secret" "$sock" "$tdir" "$offbind"' EXIT
 for _ in 1 2 3 4 5 6 7 8 9 10; do [[ -S $sock ]] && break; sleep 0.2; done
 cat > "$work/probe.sh" <<'EOF'
@@ -46,6 +49,8 @@ perl -e 'socket(S, 1, 1, 0) or exit 1' && echo unix=allowed || echo unix=blocked
 perl -e 'socket(S, 2, 1, 0) or exit 1' && echo inet=allowed || echo inet=blocked
 echo callerenv=$BWRAP_VERIFY
 touch "$TMPDIR/cwd" 2>/dev/null && echo tmpdir=writable || echo tmpdir=readonly
+touch "$4/written" 2>/dev/null && echo scratchpad=writable || echo scratchpad=readonly
+echo padbefore=$(cat "$4/before" "$4/sub/before" 2>/dev/null | tr -d '\n')
 echo proxy=$(socat -T 5 - TCP:localhost:3128 </dev/null 2>/dev/null)
 EOF
 hostns=$(readlink /proc/self/ns/net)
@@ -54,10 +59,10 @@ mkdir -p "$state"
 start=$(mktemp "$state/.verify-start.XXXXXX" 2>/dev/null)
 
 echo "command started the way Claude Code starts it:"
-out=$(BWRAP_VERIFY=passed "$bwrap" --new-session --die-with-parent --unshare-net --bind "$sock" "$sock" --ro-bind / / \
+out=$(BWRAP_VERIFY=passed CLAUDE_CODE_SESSION_ID=$sid "$bwrap" --new-session --die-with-parent --unshare-net --bind "$sock" "$sock" --ro-bind / / \
   --bind "$work" "$work" --bind "$tdir" "$tdir" --setenv TMPDIR "$tdir" --dev /dev --unshare-pid --unshare-user --cap-drop ALL --proc /proc -- \
   /bin/sh -c "socat TCP-LISTEN:3128,fork,reuseaddr UNIX-CONNECT:$sock >/dev/null 2>&1 & sleep 1
-ARGV0=apply-seccomp /proc/self/fd/3 /bin/sh $work/probe.sh $work $secret $offbind" </dev/null 2>&1)
+ARGV0=apply-seccomp /proc/self/fd/3 /bin/sh $work/probe.sh $work $secret $offbind $pad" </dev/null 2>&1)
 check "runs at all" test -n "$(val uid)"
 check "runs as $SBX_USER (uid $(val uid))" test "$(val uid)" = "$sbx_uid"
 check "no capabilities" test "$(val caps)" = 0000000000000000
@@ -72,6 +77,12 @@ check "root filesystem is read-only" test "$(val rootfs)" = readonly
 check "project directory is writable" test "$(val project)" = writable
 check "your environment reaches the command" test "$(val callerenv)" = passed
 check "TMPDIR is writable" test "$(val tmpdir)" = writable
+check "the session's scratchpad is writable" test "$(val scratchpad)" = writable
+check "files already in the scratchpad can be read, in subdirectories too" test "$(val padbefore)" = beforebefore
+echo after > "$pad/sub/after"
+out2=$(CLAUDE_CODE_SESSION_ID=$sid "$bwrap" --ro-bind / / --bind "$tdir" "$tdir" --setenv TMPDIR "$tdir" --dev /dev --proc /proc -- \
+  /bin/cat "$pad/sub/after" </dev/null 2>&1)
+check "a file you add to a scratchpad subdirectory later can be read" test "$out2" = after
 check "files only you can read stay unreadable" test "$(val secret)" = unreadable
 check "sees only $SBX_USER processes" test "$(val procuids)" = "$sbx_uid"
 [[ $fail == 0 ]] || { echo "--- output of the sandboxed command:"; echo "$out"; }

@@ -148,6 +148,26 @@ tmpdir_bound=0
 for w in "${writable[@]}"; do [[ $w == "$tmpdir_real" ]] && tmpdir_bound=1; done
 if ((tmpdir_bound)) && [[ $tmpdir =~ ^/tmp/claude-[^/]+$ && -d $tmpdir && ! -L $tmpdir && $(stat -c %u "$tmpdir") == "$caller" ]]; then
   setfacl -m "u:$SBX_UID:rwx" "$tmpdir"
+  # Claude Code creates the session's scratchpad as 0700 under $TMPDIR/<project>/<session id>/
+  sid=${env_of[CLAUDE_CODE_SESSION_ID]:-}
+  if [[ $sid =~ ^[0-9a-f-]{36}$ ]]; then
+    for pad in "$tmpdir"/*/"$sid"/scratchpad; do
+      # Works from inside the pad, so renaming a directory above it changes nothing. Default entries
+      # go on every directory before any access entry, so files made meanwhile inherit them. The
+      # sandbox account's own entry on the pad comes last: until then it cannot add anything to the
+      # pad, and a run that stops earlier is repeated by the next command
+      (
+        cd -P -- "$pad" 2>/dev/null && [[ $(pwd -P) == "$pad" ]] || exit 0
+        [[ $(stat -c %u . .. ../.. | sort -u) == "$caller" ]] || exit 0
+        [[ $(getfacl -n -cp . 2>/dev/null) == *$'\n'"user:$SBX_UID:"* ]] && exit 0
+        setfacl -P -m "d:u:$SBX_UID:rwX" -m "d:u:$caller:rwX" . 2>/dev/null || exit 0
+        find . -mindepth 1 -type d -exec setfacl -P -m "d:u:$SBX_UID:rwX" -m "d:u:$caller:rwX" {} + 2>/dev/null
+        find . -mindepth 1 \( -type d -o -type f \) -exec setfacl -P -m "u:$SBX_UID:rwX" {} + 2>/dev/null
+        setfacl -P -m "u:$SBX_UID:x" .. ../.. 2>/dev/null || exit 0
+        setfacl -P -m "u:$SBX_UID:rwx" . 2>/dev/null
+      ) || true
+    done
+  fi
 fi
 envfile=$(mktemp /var/lib/bwrap-root/env.XXXXXX)
 exec 7> "$envfile" 8< "$envfile"
