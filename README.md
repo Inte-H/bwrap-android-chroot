@@ -133,3 +133,8 @@ What `tools/verify.sh` checks:
   it others may read, such as files with mode 0644. A file holding credentials, such as
   `~/.config/gh/hosts.yml`, is readable by every sandboxed command once allowed, as it is in Claude
   Code's usual sandbox.
+- **A file created with mode 0600, as `mktemp`, Python's `tempfile` and ssh do, is unreadable to the
+  other account.** The directory ACLs let `sbx` and the Claude Code account open each other's files,
+  but a new file's ACL takes effect only up to the group bits of its mode, so a 0600 file gives the
+  other account nothing. Run `chmod g+rw <file>` as the account that created it; for a file `sbx`
+  made, do it in a sandboxed command.
