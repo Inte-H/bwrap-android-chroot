@@ -51,7 +51,10 @@ Claude Code는 chroot 안에서 `su`로 root를 얻을 수 있는 일반 계정(
 
    ```sh
    bash tools/verify.sh <프로젝트 디렉터리>
+   bash tools/test-allow.sh
    ```
+
+   `tools/test-allow.sh`는 같은 방식으로 `bwrap-root-allow`를 확인합니다.
 
 5. Claude Code 설정(`~/.claude/settings.json`)에서 샌드박스 켜기(Claude Code 계정)
 
@@ -76,7 +79,8 @@ Claude Code는 chroot 안에서 `su`로 root를 얻을 수 있는 일반 계정(
 
 ```
 Claude Code (sandbox.bwrapPath)
-  -> bin/bwrap-root (Claude Code 계정): 인자와 환경 변수를 임시 파일로 넘김
+  -> bin/bwrap-root (Claude Code 계정): PATH에 든 홈 디렉터리 아래 디렉터리에 sbx 접근 권한 부여,
+     인자와 환경 변수를 임시 파일로 넘김
   -> su -> lib/root-stage.sh (root): 별도 mount namespace 생성, 커널이 지원하지 않는 옵션 제거,
      프록시 소켓에 sbx 접근 권한 부여, Claude Code의 seccomp 헬퍼를 apply-seccomp로 교체
   -> /usr/bin/bwrap (root): Claude Code가 넘긴 옵션으로 샌드박스 구성
@@ -113,3 +117,14 @@ Claude Code (sandbox.bwrapPath)
 - **`bwrap-root`는 지원 목록에 없는 bwrap 옵션을 거부합니다.** Claude Code를 업데이트한 뒤 샌드박스 명령이
   `unsupported option`으로 실패하면 `lib/root-stage.sh`의 `ARITY` 표에 그 옵션과 인자 개수를 추가하고
   `install.sh`를 다시 실행하십시오.
+- **Claude Code 계정만 접근할 수 있는 파일은 샌드박스에서 실행하는 명령으로는 쓸 수 없습니다.** Claude
+  Code의 기본 샌드박스는 명령을 사용자 계정 그대로 실행하지만, 여기서는 `sbx` 계정으로 실행합니다.
+  `~/.local/bin`처럼 `PATH`에 든 홈 디렉터리 아래 디렉터리는, 그 디렉터리나 상위 디렉터리가 바뀔 때마다
+  `sbx`에 접근 권한을 다시 줍니다. 그래서 그 안에 일반 파일로 설치된 프로그램은 바로 실행됩니다. 다른 비공개
+  디렉터리를 가리키는 링크로 설치된 프로그램이나, 설정 파일처럼 프로그램이 따로 읽는 파일은 Claude Code
+  계정으로 `bwrap-root-allow <경로>`를 실행하십시오. 파일이면 읽기(프로그램이면 실행까지), 디렉터리면 읽기와
+  목록 보기를 허용하고, 링크를 포함해 그 경로를 따라가며 지나가는 본인 소유 디렉터리마다 통과를 허용합니다.
+  샌드박스 명령이 바꿀 수 있는 디렉터리를 지나가는 경로는 거부합니다. 어떤 디렉터리의 통과를 허용하면, 그
+  안에서 0644처럼 누구나 읽을 수 있는 파일은 `sbx`도 읽을 수 있습니다. `~/.config/gh/hosts.yml`처럼 인증
+  정보가 든 파일은 한 번 허용하면 샌드박스에서 실행하는 모든 명령이 읽을 수 있습니다. Claude Code의 기본
+  샌드박스에서도 마찬가지입니다.

@@ -40,7 +40,7 @@ if entry=$(getent passwd "$SBX_USER"); then
 fi
 
 install -d "$PREFIX/bin" "$lib" /var/lib/bwrap-root/proc
-install -m 755 "$src/bin/bwrap-root" "$PREFIX/bin/bwrap-root"
+install -m 755 "$src/bin/bwrap-root" "$src/bin/bwrap-root-allow" "$PREFIX/bin/"
 install -m 755 "$src/lib/root-stage.sh" "$lib/root-stage.sh"
 if [[ -e $lib/config ]]; then
   echo "kept      $lib/config"

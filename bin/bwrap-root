@@ -2,12 +2,46 @@
 # bwrap for a kernel without user and PID namespaces. Claude Code calls it in place of bwrap
 # (sandbox.bwrapPath) and it hands the arguments to root-stage.sh through su.
 set -u
-lib=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/bwrap-root
+bin=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+lib=$bin/../lib/bwrap-root
 . "$lib/config"
 su=$(command -v "$SU") || { echo "bwrap-root: $SU not found" >&2; exit 1; }
 state=${XDG_STATE_HOME:-$HOME/.local/state}/bwrap-root
 umask 077
 mkdir -p "$state" || exit 1
+
+# Lets sandboxed commands run programs from the PATH directories under your home directory.
+# Skipped while every path the last run looked at has the same ACL and every link it followed the
+# same target
+IFS=: read -ra path_dirs <<<"${PATH-}"
+home_dirs=()
+for d in "${path_dirs[@]}"; do [[ $d == "$HOME"/* && -d $d ]] && home_dirs+=("$d"); done
+if ((${#home_dirs[@]})); then
+  list=$state/path-allowed looked=() before= paths=() links=() targets=() fresh=0
+  [[ -f $list ]] && mapfile -t looked < "$list"
+  [[ -f $list.acl ]] && before=$(<"$list.acl")
+  for l in "${looked[@]:1}"; do
+    if [[ $l == @* ]]; then l=${l#@}; links+=("${l%%$'\t'*}"); targets+=("${l#*$'\t'}"); else paths+=("$l"); fi
+  done
+  if [[ ${looked[0]-} == "${home_dirs[*]}" ]] && ((${#paths[@]})) &&
+     [[ $(getfacl -p -- "${paths[@]}" 2>/dev/null) == "$before" ]]; then
+    fresh=1
+    if ((${#links[@]})); then
+      mapfile -t now < <(readlink -- "${links[@]}" 2>/dev/null)
+      [[ ${now[*]-} == "${targets[*]}" ]] || fresh=0
+    fi
+  fi
+  if ((!fresh)); then
+    printf '%s\n' "${home_dirs[*]}" > "$list.$$"
+    "$bin/bwrap-root-allow" -q -w "$list.$$" "${home_dirs[@]}"
+    paths=()
+    while IFS= read -r l; do [[ $l == @* ]] || paths+=("$l"); done < <(tail -n +2 "$list.$$")
+    if ((${#paths[@]})) && getfacl -p -- "${paths[@]}" > "$list.acl.$$" 2>/dev/null; then
+      mv -f "$list.acl.$$" "$list.acl" && mv -f "$list.$$" "$list"
+    fi
+    rm -f "$list.$$" "$list.acl.$$"
+  fi
+fi
 # root-stage.sh deletes the files it reads; these are from runs where su itself failed
 find "$state" -maxdepth 1 -name 'spec.*' -mmin +60 -delete 2>/dev/null
 spec=$(mktemp "$state/spec.XXXXXX") || exit 1

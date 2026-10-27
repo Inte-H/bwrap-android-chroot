@@ -53,7 +53,10 @@ the chroot, from this repository's directory.
 
    ```sh
    bash tools/verify.sh <project directory>
+   bash tools/test-allow.sh
    ```
+
+   `tools/test-allow.sh` checks `bwrap-root-allow` the same way.
 
 5. Enable the sandbox in Claude Code's settings, `~/.claude/settings.json` (Claude Code account)
 
@@ -80,7 +83,8 @@ commands have that uid's rights on the phone.
 
 ```
 Claude Code (sandbox.bwrapPath)
-  -> bin/bwrap-root (Claude Code account): hands the arguments and environment over in temporary files
+  -> bin/bwrap-root (Claude Code account): opens the PATH directories under your home directory to sbx,
+     hands the arguments and environment over in temporary files
   -> su -> lib/root-stage.sh (root): new mount namespace, drops options the kernel cannot honor,
      gives sbx access to the proxy socket, swaps Claude Code's seccomp helper for apply-seccomp
   -> /usr/bin/bwrap (root): builds the sandbox from Claude Code's options
@@ -117,3 +121,15 @@ What `tools/verify.sh` checks:
 - **`bwrap-root` rejects bwrap options that are not in its list.** If sandboxed commands fail with
   `unsupported option` after a Claude Code update, add the option and its argument count to the
   `ARITY` table in `lib/root-stage.sh` and run `install.sh` again.
+- **Files that only the Claude Code account can reach are out of reach of sandboxed commands.** Claude
+  Code's usual sandbox runs commands as your own account; this one runs them as `sbx`. Directories on
+  your `PATH` under your home directory, such as `~/.local/bin`, are opened to `sbx` again whenever
+  they or the directories above them change, so the programs stored in them as regular files run. For
+  a program installed as a link into another private directory, and for anything else a program
+  needs, such as its settings file, run `bwrap-root-allow <path>` as the Claude Code account. It lets
+  `sbx` read the file (and run it if it is a program) or read and list the directory, and pass through
+  each of your directories on the way, links included. It refuses a path through a directory that
+  sandboxed commands can change. Once `sbx` may pass through a directory, it can also read whatever in
+  it others may read, such as files with mode 0644. A file holding credentials, such as
+  `~/.config/gh/hosts.yml`, is readable by every sandboxed command once allowed, as it is in Claude
+  Code's usual sandbox.
